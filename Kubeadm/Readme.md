@@ -691,6 +691,17 @@ Delete Namespace
 kubectl delete namespace nginx
 ```
 
+Increase replicas
+
+```bash
+kubectl scale deployment nginx-deployment --replicas=5 -n nginx
+```
+
+Decrease replicas:
+
+```bash
+kubectl scale deployment nginx-deployment --replicas=2 -n nginx
+```
 ---
 
 # Learning Summary
