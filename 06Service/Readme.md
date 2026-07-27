@@ -1,4 +1,3 @@
-````md id="service-readme"
 # Kubernetes Service
 
 ## Objective
