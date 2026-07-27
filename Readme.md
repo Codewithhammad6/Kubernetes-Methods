@@ -11,8 +11,10 @@
 | GKE | Managed Kubernetes on Google Cloud |
 
 
-=====================================
 
+<p align="center">
+  <img src="structure.png" width="80%">
+</p>
 
 
 # Kubernetes Resources Used in Real Projects
