@@ -34,6 +34,10 @@ spec:
 
 Apply
 
+kind open in brower
+```bash
+kubectl port-forward svc/nginx-service 8080:80 -n nginx --address=0.0.0.0
+```
 ```bash
 kubectl apply -f service-clusterip.yml
 ```
