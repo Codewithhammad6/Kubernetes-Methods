@@ -1,32 +1,52 @@
-# Kubernetes Scheduling (Node Selector, Taints & Tolerations)
+# Kubernetes Scheduling (Labels, Node Selector, Taints & Tolerations)
 
-Kubernetes mein **Scheduling** ka matlab hai:
+Kubernetes Scheduler ka kaam hota hai:
 
-> **"Kis Node par kaunsa Pod chalega?"**
+> **"Kis Node par kaunsa Pod chalana hai?"**
 
-Iske liye Kubernetes mein 3 common concepts use hote hain:
+Iske liye Kubernetes mein ye concepts use hote hain:
 
+- Labels
 - Node Selector
-- Taints & Tolerations
-- Node Affinity
+- Taints
+- Tolerations
+- Node Affinity (Advanced)
 
-Learning ke liye pehle **Node Selector**, phir **Taints & Tolerations**, aur baad mein **Node Affinity** seekhna best approach hai.
+Learning ke liye pehle **Labels + Node Selector**, phir **Taints & Tolerations**, aur baad mein **Node Affinity** seekhna best approach hai.
 
 ---
 
-# 1. Node Selector
+# Project Architecture
 
-Node Selector ka use tab hota hai jab aap chahte ho ke koi Pod sirf ek specific Node par hi chale.
+Suppose tumhare cluster mein 2 Worker Nodes hain.
 
-## Step 1 - Node Labels
+```text
+mycluster-worker
+↓
+Frontend + MySQL
 
-Frontend aur MySQL wale node (`mycluster-worker`):
+mycluster-worker2
+↓
+Backend
+```
+
+Aur tum chahte ho:
+
+- Frontend aur MySQL sirf Worker-1 par chale.
+- Backend sirf Worker-2 par chale.
+- Koi aur Pod Worker-2 par schedule na ho.
+
+---
+
+# Step 1 - Add Labels to Nodes
+
+Frontend aur MySQL wale node par label lagao.
 
 ```bash
 kubectl label node mycluster-worker role=frontend-db
 ```
 
-Backend wale node (`mycluster-worker2`):
+Backend wale node par label lagao.
 
 ```bash
 kubectl label node mycluster-worker2 role=backend
@@ -38,9 +58,45 @@ Check labels:
 kubectl get nodes --show-labels
 ```
 
+Example Output:
+
+```text
+mycluster-worker
+role=frontend-db
+
+mycluster-worker2
+role=backend
+```
+
 ---
 
-## Frontend Deployment
+# Step 2 - Add Taint on Backend Node
+
+Backend node ko protect karo.
+
+```bash
+kubectl taint nodes mycluster-worker2 prod=true:NoSchedule
+```
+
+Check:
+
+```bash
+kubectl describe node mycluster-worker2
+```
+
+Output:
+
+```text
+Taints:
+
+prod=true:NoSchedule
+```
+
+Ab koi normal Pod Worker-2 par schedule nahi ho sakta.
+
+---
+
+# Step 3 - Frontend Deployment
 
 ```yaml
 spec:
@@ -48,15 +104,19 @@ spec:
     spec:
       nodeSelector:
         role: frontend-db
+
+      containers:
+      - name: frontend
+        image: hammadch123/frontendnotes:v1
 ```
 
-Iska matlab:
+Meaning:
 
 > Frontend Pod sirf us Node par chalega jahan label `role=frontend-db` hoga.
 
 ---
 
-## MySQL Deployment
+# Step 4 - MySQL Deployment
 
 ```yaml
 spec:
@@ -64,15 +124,112 @@ spec:
     spec:
       nodeSelector:
         role: frontend-db
+
+      containers:
+      - name: mysql
+        image: mysql:8.0
 ```
 
-Iska matlab:
+Meaning:
 
-> MySQL Pod bhi usi Node par chalega jahan label `role=frontend-db` hoga.
+> MySQL Pod bhi sirf Worker-1 par chalega.
 
 ---
 
-## Backend Deployment
+# Step 5 - Backend Deployment
+
+```yaml
+spec:
+  template:
+    spec:
+      nodeSelector:
+        role: backend
+
+      tolerations:
+      - key: "prod"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+      containers:
+      - name: backend
+        image: hammadch123/backendnotes:v1
+```
+
+Meaning:
+
+- `nodeSelector` → Backend Pod ko backend node par bhejo.
+- `tolerations` → Backend Pod ko tainted node par chalne ki permission do.
+
+---
+
+# Final Architecture
+
+```text
+                Kubernetes Cluster
+
+        ┌─────────────────────────────────┐
+        │                                 │
+        │        Control Plane            │
+        │                                 │
+        └──────────────┬──────────────────┘
+                       │
+        ┌──────────────┴──────────────┐
+        │                             │
+┌──────────────────────┐     ┌─────────────────────────┐
+│ mycluster-worker      │     │ mycluster-worker2       │
+│                       │     │                         │
+│ Label                 │     │ Label                  │
+│ role=frontend-db      │     │ role=backend           │
+│                       │     │                        │
+│                       │     │ Taint                  │
+│                       │     │ prod=true:NoSchedule   │
+│                       │     │                        │
+│ Frontend Pod          │     │ Backend Pod            │
+│ Frontend Pod          │     │ Backend Pod            │
+│ MySQL Pod             │     │ Backend Pod            │
+└──────────────────────┘     └─────────────────────────┘
+```
+
+---
+
+# What Happens if Another Deployment Comes?
+
+Example:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+
+spec:
+  replicas: 2
+
+  template:
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+```
+
+Is Deployment mein:
+
+- ❌ nodeSelector nahi hai.
+- ❌ toleration nahi hai.
+
+Result:
+
+```text
+Worker-1 ✅ Allowed
+
+Worker-2 ❌ Not Allowed
+(Because Worker-2 par taint laga hua hai.)
+```
+
+---
+
+# What Happens if Backend Toleration is Removed?
+
+Backend Deployment:
 
 ```yaml
 spec:
@@ -82,118 +239,53 @@ spec:
         role: backend
 ```
 
-Iska matlab:
-
-> Backend Pod sirf us Node par chalega jahan label `role=backend` hoga.
-
----
-
-## Result
+Result:
 
 ```text
-Worker-1
-├── Frontend
-├── Frontend
-└── MySQL
+Backend Pod
 
-Worker-2
-├── Backend
-├── Backend
-└── Backend
+↓
+
+Worker-2 par jana chahta hai
+
+↓
+
+Worker-2 tainted hai
+
+↓
+
+Permission nahi mili
+
+↓
+
+Pod Pending ❌
 ```
 
 ---
 
-## Verify
+# Taint Effects
 
-```bash
-kubectl get pods -o wide -n notes-app
-```
-
-Example:
-
-```text
-NAME                    NODE
-
-frontend-xxxxx          mycluster-worker
-frontend-yyyyy          mycluster-worker
-
-mysql-xxxxx             mycluster-worker
-
-backend-xxxxx           mycluster-worker2
-backend-yyyyy           mycluster-worker2
-backend-zzzzz           mycluster-worker2
-```
-
----
-
-# 2. Taints & Tolerations
-
-## Taint kya hota hai?
-
-**Taint Node par lagta hai.**
-
-Ye Kubernetes ko bolta hai:
-
-> **"Is Node par har Pod mat bhejo."**
-
-Example:
-
-```bash
-kubectl taint nodes mycluster-worker app=database:NoSchedule
-```
-
-Matlab:
-
-> Sirf database wale Pods is Node par chal sakte hain.
-
----
-
-## Toleration kya hoti hai?
-
-**Toleration Pod par lagti hai.**
-
-Ye Kubernetes ko bolti hai:
-
-> **"Ye Pod is Taint ko tolerate karta hai."**
-
-Example:
-
-```yaml
-tolerations:
-- key: "app"
-  operator: "Equal"
-  value: "database"
-  effect: "NoSchedule"
-```
-
-Ab Database Pod us Node par schedule ho sakta hai.
-
----
-
-## Taint Effects
-
-### NoSchedule
+## 1. NoSchedule
 
 ```text
 Naye Pods schedule nahi honge.
-```
 
 Existing Pods chalti rahengi.
+```
 
 ---
 
-### PreferNoSchedule
+## 2. PreferNoSchedule
 
 ```text
 Kubernetes koshish karega ke Pod is Node par na bheje.
 
-Lekin zarurat ho to schedule kar sakta hai.
+Agar zarurat ho to schedule kar sakta hai.
 ```
 
 ---
 
-### NoExecute
+## 3. NoExecute
 
 ```text
 Naye Pods schedule nahi honge.
@@ -203,103 +295,121 @@ Purane Pods bhi remove kar diye jayenge.
 
 ---
 
-# Database ko Specific Node par Chalana
+# Labels vs Node Selector vs Taints vs Tolerations
 
-Agar MySQL, MongoDB ya koi bhi database **ek specific Node par chalana ho**, to sirf PVC par depend nahi karna chahiye.
+## Label
 
-Production mein aksar:
+Node ko identity deta hai.
 
-- Pehle specific Node par PV banaya jata hai.
-- Phir PVC us PV ko claim karti hai.
-- Phir Database Pod us PVC ko mount karta hai.
-
-Flow:
+Example:
 
 ```text
-Specific Worker Node
-        │
-        ▼
-Persistent Volume (PV)
-        │
-        ▼
-PersistentVolumeClaim (PVC)
-        │
-        ▼
-MySQL / MongoDB Pod
+role=frontend-db
+
+role=backend
 ```
 
 ---
 
-## Example PV
+## Node Selector
+
+Pod ko specific label wale Node par schedule karta hai.
+
+Example:
 
 ```yaml
-apiVersion: v1
-kind: PersistentVolume
-
-metadata:
-  name: mysql-pv
-
-spec:
-  capacity:
-    storage: 2Gi
-
-  accessModes:
-    - ReadWriteOnce
-
-  hostPath:
-    path: /data/mysql
-
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - mycluster-worker
-```
-
-### Meaning
-
-```text
-PV sirf mycluster-worker Node par available hai.
-
-Jab PVC is PV ko claim karegi,
-to Database Pod bhi usi Node par schedule hoga.
+nodeSelector:
+  role: backend
 ```
 
 ---
 
-# Interview Notes
+## Taint
 
-**Node Selector**
+Node ko normal Pods se protect karta hai.
 
-> Pod ko specific Node par chalana.
+Example:
 
-**Taint**
-
-> Node par restriction lagana.
-
-**Toleration**
-
-> Pod ko restricted Node par chalne ki permission dena.
-
-**Node Affinity**
-
-> Node Selector ka advanced aur flexible version.
+```bash
+kubectl taint nodes mycluster-worker2 prod=true:NoSchedule
+```
 
 ---
 
-# Final Summary
+## Toleration
+
+Sirf selected Pods ko tainted Node par chalne ki permission deta hai.
+
+Example:
+
+```yaml
+tolerations:
+- key: "prod"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
+```
+
+---
+
+# Production Use Cases
+
+Ye scheduling concepts production mein bahut use hote hain.
+
+Examples:
+
+- Backend Nodes
+- Database Nodes
+- GPU Nodes
+- Monitoring Nodes
+- Logging Nodes
+
+Har workload ko dedicated node par run karna ho to Labels, Node Selector, Taints aur Tolerations use kiye jate hain.
+
+---
+
+# Formula Yaad Rakho
 
 ```text
-Node Selector → Pod ko specific Node par schedule karta hai.
+Label
+↓
+Node ki identity
 
-Taint → Node par restriction lagata hai.
+nodeSelector
+↓
+Pod ko kis Node par bhejna hai
 
-Toleration → Specific Pod ko us restricted Node par chalne deta hai.
+Taint
+↓
+Node ko protect karna hai
 
-Node Affinity → Advanced scheduling ke liye use hoti hai.
+Toleration
+↓
+Kis Pod ko us protected Node par allow karna hai
+```
 
-Database (MongoDB, MySQL) → Aksar specific Node + PV + PVC ke saath deploy ki jati hai taake data aur storage stable rahe.
+---
+
+# Interview Summary
+
+- **Label** → Node ko identity deta hai.
+- **nodeSelector** → Pod ko specific label wale Node par schedule karta hai.
+- **Taint** → Node ko normal Pods se protect karta hai.
+- **Toleration** → Sirf selected Pods ko tainted Node par chalne ki permission deta hai.
+- **Node Affinity** → Node Selector ka advanced aur flexible version.
+
+---
+
+# One-Line Summary
+
+```text
+Label → Node ki pehchan
+
+nodeSelector → Pod ko specific Node par bhejta hai
+
+Taint → Node ko protect karta hai
+
+Toleration → Protected Node par specific Pod ko allow karti hai
+
+Node Affinity → Advanced scheduling rules ke liye use hoti hai.
 ```
