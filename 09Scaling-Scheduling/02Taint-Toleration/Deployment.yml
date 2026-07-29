@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: frontend-deployment
+  namespace: notes-app
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: frontend
+
+  template:
+    metadata:
+      labels:
+        app: frontend
+
+    spec:
+      nodeSelector:
+        role: frontend-db
+
+      containers:
+      - name: frontend
+        image: hammadch123/frontendnotes:v1
+        ports:
+        - containerPort: 80
