@@ -552,3 +552,108 @@ mongo-2 → 200MB
 
 Each Pod can still use **up to 5Gi** whenever needed.
 
+
+
+
+
+# Kubernetes Resource Requests & Limits
+
+## 1. Experience (Sabse common)
+
+Shuru mein estimate lagaya jata hai.
+
+### Example
+
+### Frontend (Nginx + React)
+
+```yaml
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+```
+
+### Kyun?
+
+- Static files hain.
+- CPU bahut kam use hoti hai.
+- RAM bhi kam lagti hai.
+
+---
+
+### Backend (Node.js/Django)
+
+```yaml
+resources:
+  requests:
+    cpu: "500m"
+    memory: "512Mi"
+
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+```
+
+Backend API requests process karta hai, isliye frontend se zyada resources chahiye.
+
+---
+
+### MySQL
+
+```yaml
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+```
+
+Database caching karta hai, isliye RAM zyada chahiye hoti hai.
+
+---
+
+# 2. Monitoring (Production)
+
+Application deploy karte hain.
+
+Phir dekhte hain:
+
+```bash
+kubectl top pods
+```
+
+### Example
+
+```text
+frontend
+CPU 30m
+RAM 90Mi
+
+backend
+CPU 450m
+RAM 420Mi
+
+mysql
+CPU 120m
+RAM 700Mi
+```
+
+Ab samajh aa gaya:
+
+- Frontend sirf **90Mi** use kar raha hai.
+
+To request:
+
+```yaml
+requests:
+  memory: 128Mi
+```
+
+Kaafi hai.
