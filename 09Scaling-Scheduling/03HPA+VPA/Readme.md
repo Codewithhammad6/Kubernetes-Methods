@@ -801,3 +801,366 @@ More Apache Pods
 - **Metrics Server** collects CPU and RAM usage.
 - **HPA** automatically increases or decreases Pods based on CPU utilization.
 - **BusyBox** is used to generate load for HPA testing.
+
+
+
+
+
+
+
+
+
+# Vertical Pod Autoscaler (VPA) in Kubernetes
+
+## What is VPA?
+
+**Vertical Pod Autoscaler (VPA)** automatically adjusts the **CPU** and **Memory** resources of a Pod based on its actual usage.
+
+Unlike HPA, which increases or decreases the number of Pods, VPA changes the resource allocation of existing Pods.
+
+---
+
+
+# How VPA Works
+
+```
+                +--------------------+
+                |     Application    |
+                +---------+----------+
+                          |
+                          v
+                     Metrics Server
+                          |
+                          v
+                   VPA Recommender
+                          |
+                          v
+               CPU & Memory Analysis
+                          |
+                          v
+             Recommended Resource Values
+                          |
+                          v
+              VPA Updater (Auto Mode)
+                          |
+                          v
+                 Restart Pod (If Needed)
+                          |
+                          v
+             Pod Starts with New Resources
+```
+
+---
+
+# Step 1: Verify Metrics Server
+
+Check whether the Metrics Server is running correctly.
+
+```bash
+kubectl top nodes
+```
+
+```bash
+kubectl top pods -A
+```
+
+If CPU and Memory usage are displayed, the Metrics Server is working properly.
+
+---
+
+# Step 2: Install Vertical Pod Autoscaler
+
+Clone the Kubernetes Autoscaler repository.
+
+```bash
+git clone https://github.com/kubernetes/autoscaler.git
+```
+
+Move into the VPA directory.
+
+```bash
+cd autoscaler/vertical-pod-autoscaler
+```
+
+Install VPA.
+
+```bash
+./hack/vpa-up.sh
+```
+
+---
+
+# Step 3: Verify Installation
+
+```bash
+kubectl get pods -n kube-system
+```
+
+You should see:
+
+- vpa-admission-controller
+- vpa-recommender
+- vpa-updater
+
+All Pods should be in the **Running** state.
+
+---
+
+# Step 4: Apache Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: apache-deployment
+  namespace: apache
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: apache
+
+  template:
+    metadata:
+      labels:
+        app: apache
+
+    spec:
+      containers:
+      - name: apache
+        image: httpd:2.4
+
+        ports:
+        - containerPort: 80
+
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+```
+
+Apply Deployment.
+
+```bash
+kubectl apply -f deployment.yml
+```
+
+---
+
+# Step 5: Create VPA
+
+Create **vpa.yml**
+
+```yaml
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+
+metadata:
+  name: apache-vpa
+  namespace: apache
+
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: apache-deployment
+
+  updatePolicy:
+    updateMode: Auto
+```
+
+Apply the configuration.
+
+```bash
+kubectl apply -f vpa.yml
+```
+
+---
+
+# Step 6: Verify VPA
+
+```bash
+kubectl get vpa -n apache
+```
+
+View detailed recommendations.
+
+```bash
+kubectl describe vpa apache-vpa -n apache
+```
+
+Example Output:
+
+```
+Target
+
+CPU : 250m
+Memory : 256Mi
+
+Lower Bound
+
+CPU : 100m
+Memory : 128Mi
+
+Upper Bound
+
+CPU : 500m
+Memory : 512Mi
+```
+
+---
+
+# Step 7: Generate Load
+
+Create a BusyBox Pod.
+
+```bash
+kubectl run -it --rm load-generator \
+  --image=busybox \
+  -n apache \
+  -- sh
+```
+
+Inside the container, continuously send requests.
+
+```sh
+while true; do
+    wget -q -O- http://apache-service
+done
+```
+
+This generates traffic so VPA can analyze resource usage.
+
+---
+
+# VPA Update Modes
+
+## Off
+
+- Only provides recommendations.
+- Does not modify Pods.
+
+```yaml
+updatePolicy:
+  updateMode: Off
+```
+
+---
+
+## Initial
+
+- Applies recommended resources only when a new Pod is created.
+- Running Pods are not modified.
+
+```yaml
+updatePolicy:
+  updateMode: Initial
+```
+
+---
+
+## Auto
+
+- Continuously monitors CPU and Memory usage.
+- Automatically restarts Pods when necessary.
+- New Pods start with updated CPU and Memory values.
+
+```yaml
+updatePolicy:
+  updateMode: Auto
+```
+
+---
+
+# How VPA Makes Decisions
+
+```
+Pod Running
+      │
+      ▼
+Metrics Server Collects CPU & Memory
+      │
+      ▼
+VPA Recommender Analyzes Usage
+      │
+      ▼
+Recommendation Generated
+      │
+      ▼
+Auto Mode?
+      │
+ ┌────┴─────┐
+ │          │
+Yes         No
+ │          │
+ ▼          ▼
+Restart     Only Recommendation
+Pod
+ │
+ ▼
+Pod Starts with Updated Resources
+```
+
+---
+
+# Useful Commands
+
+Apply Deployment
+
+```bash
+kubectl apply -f deployment.yml
+```
+
+Apply VPA
+
+```bash
+kubectl apply -f vpa.yml
+```
+
+List VPAs
+
+```bash
+kubectl get vpa -n apache
+```
+
+Describe VPA
+
+```bash
+kubectl describe vpa apache-vpa -n apache
+```
+
+View Pod Metrics
+
+```bash
+kubectl top pods -n apache
+```
+
+View Node Metrics
+
+```bash
+kubectl top nodes
+```
+
+Delete VPA
+
+```bash
+kubectl delete -f vpa.yml
+```
+
+---
+
+# Summary
+
+- VPA automatically adjusts CPU and Memory resources.
+- It relies on the Metrics Server for usage data.
+- The VPA Recommender analyzes resource consumption.
+- In **Auto** mode, Pods are restarted with updated resources.
+- In **Off** mode, only recommendations are generated.
+- In **Initial** mode, recommendations are applied only to newly created Pods.
