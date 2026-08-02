@@ -1,0 +1,41 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+
+metadata:
+  name: apache-manager
+  namespace: apache
+
+rules:
+- apiGroups: [""]
+  resources:
+    - pods
+    - services
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+    - delete
+
+- apiGroups: ["apps"]    # ismay only deployment ko del allow ni kia
+  resources:
+    - deployments
+  verbs:
+    - get
+    - list
+    - watch
+    - create
+    - update
+    - patch
+
+
+
+#     Yaad rakhne ka shortcut
+# apiGroups: [""] → Core resources (Pods, Services, ConfigMaps, Secrets, PVC)
+# apiGroups: ["apps"] → Workloads (Deployments, ReplicaSets, StatefulSets, DaemonSets)
+# apiGroups: ["batch"] → Jobs & CronJobs
+# apiGroups: ["networking.k8s.io"] → Ingress & NetworkPolicy
+# apiGroups: ["rbac.authorization.k8s.io"] → RBAC resources
+# apiGroups: ["*"] → Har API Group (wildcard, production me avoid jab tak zarurat na ho)

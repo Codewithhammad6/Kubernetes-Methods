@@ -17,6 +17,14 @@ Kubernetes Cluster (Company)
 
 Har department Kubernetes ka ek **Namespace** hai.
 
+
+
+
+
+ServiceAccount  ───────────────► Identity
+Role            ───────────────► Permissions
+RoleBinding     ───────────────► Identity + Permissions ko connect karta hai
+
 ---
 
 # Step 2: Company mein Employees hote hain

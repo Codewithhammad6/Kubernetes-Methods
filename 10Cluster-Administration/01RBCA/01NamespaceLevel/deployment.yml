@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: apache-deployment
+  namespace: apache
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: apache
+
+  template:
+    metadata:
+      labels:
+        app: apache
+
+    spec:
+      serviceAccountName: apache-user   # specifying the service account to use for this deployment
+      containers:
+        - name: apache
+          image: httpd:2.4
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+
+# check the apache user permissions by running the following command:
+# kubectl auth can-i delete deployment   --as=system:serviceaccount:apache:apache-user   -n apache
+
+# check i have permission to delete the deployment or not by running the following command:
+# kubectl auth can-i delete deployment -n apache
