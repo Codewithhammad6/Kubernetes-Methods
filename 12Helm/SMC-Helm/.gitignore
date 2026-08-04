@@ -1,0 +1,37 @@
+# SSH
+.ssh/
+**/.ssh/
+
+# Kubernetes
+.kube/
+**/.kube/
+
+# Linux Home Files
+.bash_history
+.bashrc
+.bash_logout
+.profile
+.gitconfig
+.viminfo
+.lesshst
+
+# Helm Packages
+*.tgz# SSH
+.ssh/
+**/.ssh/
+
+# Kubernetes
+.kube/
+**/.kube/
+
+# Linux Home Files
+.bash_history
+.bashrc
+.bash_logout
+.profile
+.gitconfig
+.viminfo
+.lesshst
+
+# Helm Packages
+*.tgz
