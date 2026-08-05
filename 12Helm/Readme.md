@@ -690,4 +690,4 @@ helm uninstall dev-app
 - `helm rollback` restores a previous revision.
 - `helm history` shows release revisions.
 - `helm uninstall` removes a release.
-- In production, use dedicated values files (`values-dev.yaml`, `values-stage.yaml`, `values-prod.yaml`) instead of modifying `values.yaml` for every environment.
+- In production, use dedicated values files (`values-dev.yaml`, `values-stage.yaml`, `values-prod.yaml`) instead of modifying `values.yaml` for environment.
